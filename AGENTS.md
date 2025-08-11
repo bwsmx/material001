@@ -1,23 +1,22 @@
-# AGENTS.md – People Counter
+# AGENTS.md – People Counter (material001)
 
 ## What this repo is
-A single-page, offline-first people counter (index.html + inline JS/CSS).
+A single-page, offline-first people counter (index.html + inline JS/CSS). Multi-counter, per-counter capacity/lockout, offline queue, optional endpoint sync.
 
-## Rules of engagement
-- Do NOT break the primary guard UI: 44+ px touch targets, high contrast, works offline.
-- Maintain existing keyboard shortcuts (E, X, U, R).
-- If you add files, keep it zero-build (plain HTML/JS/CSS). No bundlers.
+## Branch policy
+- Default branch: `dev`. Feature work happens on `dev` or short-lived feature branches.
+- Open PRs into `main` for releases. Do NOT push directly to `main`.
+- Codex: always open PRs into `main`.
 
-## How to run / test
-- Serve locally: `python3 -m http.server 8000` and open http://localhost:8000
-- Smoke test: page loads; + / – buttons update counts; settings dialog opens with PIN 1234 (configurable).
-- If you update storage keys, include a one-time migration and don’t lose prior settings.
+## Guardrails
+- Keep the guard UI simple: huge tap targets (≥44px), high contrast, keyboard shortcuts (E=+1, X=−1, U=undo, R=clear).
+- Offline-first must never break; localStorage persistence must survive reloads.
+- If changing storage keys, include a one-time migration to preserve settings.
+- Avoid adding build tooling. Keep plain HTML/JS/CSS unless explicitly requested.
+
+## Testing
+- Manual smoke: load index.html, tap +/−, open ⚙️ with PIN (1234 by default), confirm endpoint/counters persist after reload.
 
 ## PR requirements
-- Update README with any user-facing change.
-- Keep changes minimal, focused, and explain *why* in the PR body.
-
-## Backlog hints
-- Add GitHub Pages CI.
-- Add basic Playwright smoke test (later).
-- Add JSON import/export for settings for quick device setup.
+- Keep changes small and focused; explain *why* in PR body.
+- Update README for user-visible changes.
