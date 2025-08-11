@@ -21,3 +21,10 @@ All data is stored locally in your browser. If you configure an endpoint, counts
 ## Deployment
 Static HTML; host index.html on any static file server. Pushes to the `main` branch are automatically deployed to GitHub Pages.
 
+### GitHub Pages (GitHub Actions)
+
+- In repo **Settings → Pages**, set **Build and deployment → Source = GitHub Actions**.
+- Merging to `main` triggers the deploy workflow.
+- Live URL: https://bwsmx.github.io/material001/
+- If a deploy fails with 404 from `deploy-pages`, confirm the Pages Source is **GitHub Actions** and re-run the workflow.
+
