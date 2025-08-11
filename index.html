@@ -6,7 +6,7 @@
   <title>People Counter</title>
   <meta name="robots" content="noindex,nofollow" />
   <style>
-    :root { --bg:#ffffff; --fg:#111; --muted:#666; --border:#e5e5e5; --ok:#10b981; --warn:#f59e0b; --danger:#f43f5e; --over:#dc2626; }
+    :root { --bg:#ffffff; --fg:#111; --muted:#666; --border:#e5e5e5; --ok:#10b981; --warn:#f59e0b; --danger:#f59e0b; --over:#dc2626; }
     *{box-sizing:border-box}
     html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
     .app{min-height:100%;display:flex;flex-direction:column}
@@ -84,9 +84,10 @@
           <div style="flex:1;max-width:420px"><input id="eventNameInput" class="input wide" placeholder="Feria Material 2025" /></div>
         </div>
         <div class="row">
-          <div class="label">Event code</div>
-          <div><input id="sessionInput" class="input" placeholder="2025-02-10" /></div>
+          <div class="label">Event code (for logs)</div>
+          <div><input id="sessionInput" class="input" placeholder="e.g. FM25-Thu" /></div>
         </div>
+        <div class="small" style="margin-top:-4px">Used for syncing & reports. Leave the default date, or set a short code like "FM25-Thu".</div>
         <div class="row">
           <div class="label">Day</div>
           <div><button id="newDayBtn" class="pill">New day</button></div>
@@ -164,7 +165,7 @@
     const sget = (k, d)=>{ try{ const v = localStorage.getItem(k); return v==null? d : JSON.parse(v);}catch{ return d; } };
     const sset = (k, v)=>{ try{ localStorage.setItem(k, JSON.stringify(v)); }catch{} };
 
-    // ---- Legacy key migration (so Endpoint/Session persist across versions) ----
+    // ---- Legacy key migration ----
     function readLegacy(keys){ for(const k of keys){ try{ const v = localStorage.getItem(k); if(v!=null) return JSON.parse(v);}catch{} } return null; }
 
     // ---- State ----
@@ -192,7 +193,7 @@
       }
     })();
 
-    let queue = sget(KEYS.queue, []); // array of pending events
+    let queue = sget(KEYS.queue, []);
 
     // ---- Elements ----
     const countEl = document.getElementById('count');
@@ -241,12 +242,11 @@
     function active(){ return counters.find(c=>c.id===counterId) || counters[0]; }
 
     function replay(history, createdAt){
-      // Recompute only for the ACTIVE counter
       let start=-1; for(let i=history.length-1;i>=0;i--){ if(history[i].type==='newDay'){ start=i; break; } }
       let inside=0,total=0,peak=0; let since=createdAt; if(start>=0) since = history[start].t || since;
       for(let i=start+1;i<history.length;i++){
         const h = history[i];
-        if(h.counter_id!==counterId) continue; // filter by active counter
+        if(h.counter_id!==counterId) continue;
         if(h.type==='enter'){ inside += (h.amount||0); total += (h.amount||0); }
         else if(h.type==='exit'){ inside = Math.max(0, inside - (h.amount||0)); }
         else if(h.type==='adjust'){ const a=h.amount||0; inside = Math.max(0, inside + a); if(a>0) total += a; }
@@ -296,7 +296,6 @@
       const label = (newCounterLabel.value||'').trim();
       if(!label) { alert('Enter a label'); return; }
       let id = slugify(label) || 'counter';
-      // ensure unique
       let base=id, i=2; while(counters.find(c=>c.id===id)) { id = base+'-'+i++; }
       counters.push({id, label, cap: 300, lockout: false}); newCounterLabel.value=''; save(); render();
     }
@@ -338,23 +337,27 @@
         inp.addEventListener('input', ()=>{
           const id = inp.getAttribute('data-label-for');
           const c = counters.find(x=>x.id===id); if(!c) return;
-          c.label = inp.value.trim(); if(c.id===counterId){ counterLabel=c.label; }
-          save(); render();
+          c.label = inp.value; if(c.id===counterId){ counterLabel=c.label; chipText.textContent=counterLabel; }
+          save(); // do not re-render on every keystroke
         });
+        inp.addEventListener('blur', ()=>{ render(); });
+        inp.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ inp.blur(); }});
       });
       countersList.querySelectorAll('input[data-cap-for]').forEach(inp=>{
         inp.addEventListener('input', ()=>{
           const id = inp.getAttribute('data-cap-for');
           const c = counters.find(x=>x.id===id); if(!c) return;
           const n = Math.max(1, Math.floor(Number(inp.value)||0));
-          c.cap = n; save(); render();
+          c.cap = n; save();
         });
+        inp.addEventListener('blur', ()=>{ render(); });
       });
       countersList.querySelectorAll('[data-lock-for]').forEach(tg=>{
         tg.addEventListener('click', ()=>{
           const id = tg.getAttribute('data-lock-for');
           const c = counters.find(x=>x.id===id); if(!c) return;
-          c.lockout = !c.lockout; tg.classList.toggle('on', c.lockout); save(); render();
+          c.lockout = !c.lockout; tg.classList.toggle('on', c.lockout); save();
+          if(c.id===counterId) { /* no need to full render */ }
         });
       });
       countersList.querySelectorAll('button[data-del]').forEach(b=>{
@@ -413,14 +416,19 @@
     newDayBtn.onclick = newDay;
     csvBtn.onclick = exportCSV;
 
-    // Connectivity inputs
-    endpointInput.oninput = (e)=> { endpoint = e.target.value.trim(); save(); render(); };
+    // Connectivity inputs (save-only; re-render on blur to avoid input blur issues)
+    endpointInput.addEventListener('input', (e)=> { endpoint = e.target.value; save(); });
+    endpointInput.addEventListener('blur', ()=>{ render(); });
     syncNowBtn.onclick = ()=> flushQueue();
     testEndpointBtn.onclick = testConnection;
 
     // Event inputs
     eventNameInput.oninput = (e)=> { eventName = e.target.value; save(); };
     document.getElementById('sessionInput').oninput = (e)=> { sessionId = e.target.value.trim() || sessionId; save(); };
+
+    // Add counter actions
+    addCounterBtn.onclick = addCounter;
+    newCounterLabel.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ addCounter(); }});
 
     // Security
     setPinBtn.onclick = ()=> { const v = (pinInput.value||'').trim(); if(!v){ pin='1234'; alert('PIN cleared (defaults to 1234).'); } else if(!/^\d{4}$/.test(v)){ alert('Enter a 4‑digit PIN'); return; } else { pin=v; alert('PIN updated'); } pinInput.value=''; save(); };
@@ -429,7 +437,6 @@
     async function testConnection(){
       if(!endpoint){ alert('Set the Endpoint URL first.'); return; }
       try{
-        // CORS-free image ping first
         await new Promise((resolve,reject)=>{
           const img = new Image();
           const t = Date.now();
@@ -440,7 +447,7 @@
         });
         alert('Endpoint reachable');
         return;
-      }catch(e){ /* fall through to fetch */ }
+      }catch(e){ }
       try{
         const u = new URL(endpoint);
         u.searchParams.set('fn','ping');
@@ -451,10 +458,9 @@
       }
     }
 
-    async function hydrate(){ if(!endpoint) { render(); return; } try{ const u = new URL(endpoint); u.searchParams.set('fn','state'); u.searchParams.set('session_id', sessionId); u.searchParams.set('counter_id', counterId); const r = await fetch(u, {method:'GET'}); if(!r.ok) throw new Error('HTTP '+r.status); const j = await r.json(); if(j && typeof j.inside==='number'){ state.inside = j.inside; state.total = j.total||state.total; state.peak = Math.max(state.peak||0, j.peak||0); state.createdAt = j.createdAt||state.createdAt; // Reapply queued local events on top
-          for(const q of queue){ if(q.type==='enter'){ state.inside += (q.amount||0); state.total += (q.amount||0);} else if(q.type==='exit'){ state.inside = Math.max(0, state.inside-(q.amount||0)); } else if(q.type==='adjust'){ const a=q.amount||0; state.inside = Math.max(0, state.inside+a); if(a>0) state.total += a; } else if(q.type==='clear'){ state.inside=0; } }
+    async function hydrate(){ if(!endpoint) { render(); return; } try{ const u = new URL(endpoint); u.searchParams.set('fn','state'); u.searchParams.set('session_id', sessionId); u.searchParams.set('counter_id', counterId); const r = await fetch(u, {method:'GET'}); if(!r.ok) throw new Error('HTTP '+r.status); const j = await r.json(); if(j && typeof j.inside==='number'){ state.inside = j.inside; state.total = j.total||state.total; state.peak = Math.max(state.peak||0, j.peak||0); state.createdAt = j.createdAt||state.createdAt; for(const q of queue){ if(q.type==='enter'){ state.inside += (q.amount||0); state.total += (q.amount||0);} else if(q.type==='exit'){ state.inside = Math.max(0, state.inside-(q.amount||0)); } else if(q.type==='adjust'){ const a=q.amount||0; state.inside = Math.max(0, state.inside+a); if(a>0) state.total += a; } else if(q.type==='clear'){ state.inside=0; } }
         }
-      } catch(e){ /* stay offline */ }
+      } catch(e){ }
       render();
     }
 
@@ -476,6 +482,23 @@
 
     // periodic flush
     setInterval(flushQueue, 5000);
+
+    // --- tiny console tests (opt-in) ---
+    function runTests(){
+      const out=[]; const assert=(name,cond,details='')=>out.push({name, pass:!!cond, details: cond?'':details});
+      // slug uniqueness
+      let L=[{id:'a',label:'A'},{id:'a-2',label:'A  '},{id:'a-3',label:'A!'}];
+      let id='a', base='a', i=2; while(L.find(c=>c.id===id)) id=base+'-'+i++;
+      assert('unique slug increments', id==='a-4', id);
+      // replay logic
+      const now=Date.now();
+      const H=[{type:'enter',amount:3,counter_id:'main-entrance',t:now},{type:'exit',amount:1,counter_id:'main-entrance',t:now+1},{type:'newDay',t:now+2},{type:'enter',amount:2,counter_id:'main-entrance',t:now+3}];
+      const r=replay(H,now);
+      assert('new day resets counts', r.inside===2 && r.total===2, JSON.stringify(r));
+      console.table(out);
+      return out;
+    }
+    if(location.search.includes('test=1')) { runTests(); }
 
     // Initial
     (function initRecalc(){ const r = replay(state.history, state.createdAt); state.inside=r.inside; state.total=r.total; state.peak=r.peak; })();
